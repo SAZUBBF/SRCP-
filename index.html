@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>SRCP Map - GitHub Data</title>
+  <title>SRCP Map</title>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
@@ -22,8 +22,10 @@
     }
 
     .sidebar {
-      position:absolute; top:0; left:0;
-      width:260px; height:100%;
+      position:absolute;
+      top:0; left:0;
+      width:260px;
+      height:100%;
       background:white;
       z-index:1000;
       padding:15px;
@@ -32,6 +34,12 @@
     }
 
     .sidebar.hide { left:-260px; }
+
+    .sidebar select, .sidebar button {
+      width:100%;
+      margin-bottom:10px;
+      padding:6px;
+    }
 
     .toggle-btn {
       position:absolute;
@@ -46,6 +54,45 @@
     }
 
     .toggle-btn.shift { left:10px; }
+
+    .left-controls {
+      position:absolute;
+      bottom:15px;
+      left:10px;
+      z-index:1000;
+      display:flex;
+      flex-direction:column;
+      gap:10px;
+    }
+
+    .locate-btn, .compass {
+      background:white;
+      width:40px;
+      height:40px;
+      border-radius:6px;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      cursor:pointer;
+      box-shadow:0 0 5px rgba(0,0,0,0.3);
+    }
+
+    .compass {
+      border-radius:50%;
+      color:red;
+      font-weight:bold;
+    }
+
+    @media (max-width:600px){
+      .sidebar { width:220px; }
+      .left-controls { bottom:10px; left:8px; }
+      .locate-btn, .compass {
+        width:34px;
+        height:34px;
+        font-size:14px;
+      }
+    }
+
   </style>
 </head>
 
@@ -74,44 +121,88 @@
 
 <div id="toggleBtn" class="toggle-btn">☰</div>
 
+<!-- LEFT CONTROLS -->
+<div class="left-controls">
+  <div class="locate-btn" id="locateBtn">📍</div>
+  <div class="compass">N</div>
+</div>
+
 <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
 
 <script>
-// ================= MAP =================
-var map = L.map('map').setView([23.6850, 90.3563], 7);
 
-L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+// ================= BASEMAPS =================
+
+// OpenStreetMap (Google-like road map)
+var osm = L.tileLayer(
+'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+{ attribution: '© OpenStreetMap' }
+);
+
+// Satellite (Esri)
+var satellite = L.tileLayer(
+'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+{ attribution: 'Tiles © Esri' }
+);
+
+// ================= MAP =================
+var map = L.map('map',{
+  center:[23.6850,90.3563],
+  zoom:7,
+  layers:[satellite]
+});
+
+// Layer control
+L.control.layers({
+  "Google Map": osm,
+  "Satellite": satellite
+}).addTo(map);
+
+// ================= SIDEBAR =================
+var sidebar = document.getElementById("sidebar");
+var toggleBtn = document.getElementById("toggleBtn");
+
+toggleBtn.onclick = function(){
+  sidebar.classList.toggle("hide");
+  toggleBtn.classList.toggle("shift");
+};
+
+// ================= LOCATION =================
+var userMarker;
+
+document.getElementById("locateBtn").onclick = function () {
+  map.locate({ setView: true, maxZoom: 16 });
+};
+
+map.on("locationfound", function (e) {
+  if (userMarker) map.removeLayer(userMarker);
+
+  userMarker = L.circleMarker(e.latlng, {
+    radius: 8,
+    color: "blue"
+  }).addTo(map)
+    .bindPopup("📍 You are here")
+    .openPopup();
+});
 
 // ================= DATA =================
+var files = [
+  "data_part1.geojson",
+  "data_part2.geojson",
+  "data_part3.geojson",
+  "data_part4.geojson",
+  "data_part5.geojson"
+];
+
 var allFeatures = [];
 var geoLayer;
 
-// ================= GITHUB RAW FILES =================
-var files = [
-  "https://raw.githubusercontent.com/YOUR_USERNAME/srcp-map/main/data/data_part1.geojson",
-  "https://raw.githubusercontent.com/YOUR_USERNAME/srcp-map/main/data/data_part2.geojson",
-  "https://raw.githubusercontent.com/YOUR_USERNAME/srcp-map/main/data/data_part3.geojson",
-  "https://raw.githubusercontent.com/YOUR_USERNAME/srcp-map/main/data/data_part4.geojson",
-  "https://raw.githubusercontent.com/YOUR_USERNAME/srcp-map/main/data/data_part5.geojson"
-];
-
-// ================= LOAD DATA =================
-Promise.all(
-  files.map(url =>
-    fetch(url).then(res => res.json())
-  )
-)
-.then(results => {
-  results.forEach(d => {
-    if (d.features) allFeatures.push(...d.features);
-  });
-
+// ================= LOAD =================
+Promise.all(files.map(f=>fetch(f).then(r=>r.json())))
+.then(results=>{
+  results.forEach(d=>allFeatures.push(...d.features));
   initFilters();
   drawLayer(allFeatures);
-})
-.catch(err => {
-  console.error(err);
-  alert("Data loading failed. Check file path or GitHub links.");
 });
 
 // ================= DRAW =================
@@ -120,20 +211,20 @@ function drawLayer(features){
   if(geoLayer) map.removeLayer(geoLayer);
 
   geoLayer = L.geoJSON(features,{
-    style:{color:'yellow',weight:2,fillOpacity:0},
+    style:{color:'#FFFF00',weight:2,fillOpacity:0},
 
     onEachFeature:(feature,layer)=>{
       layer.on('click', e=>{
+        geoLayer.resetStyle();
+        e.target.setStyle({color:'red'});
+
         let html="<table border='1'>";
         for(let k in feature.properties){
           html+=`<tr><td><b>${k}</b></td><td>${feature.properties[k]}</td></tr>`;
         }
         html+="</table>";
 
-        L.popup()
-          .setLatLng(e.latlng)
-          .setContent(html)
-          .openOn(map);
+        L.popup().setLatLng(e.latlng).setContent(html).openOn(map);
       });
     }
 
@@ -161,6 +252,7 @@ function initFilters(){
   fill("districtFilter",unique("District_"));
 }
 
+// cascading
 districtFilter.onchange=function(){
   let d=this.value;
   let f=allFeatures.filter(x=>!d||x.properties.District_===d);
@@ -221,12 +313,6 @@ function searchPumpOwner(){
 
   drawLayer([f]);
 }
-
-// ================= SIDEBAR =================
-document.getElementById("toggleBtn").onclick = function(){
-  document.getElementById("sidebar").classList.toggle("hide");
-  this.classList.toggle("shift");
-};
 
 </script>
 
