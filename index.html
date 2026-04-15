@@ -1,24 +1,13 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>SRCP Map - Google Drive Final</title>
+  <title>SRCP Map - Final Fix</title>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-
   <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
-
   <style>
     body { margin:0; }
     #map { height:100vh; }
-
-    .search-box {
-      position:absolute; top:10px; left:50%;
-      transform:translateX(-50%);
-      z-index:1000;
-      background:white; padding:6px;
-      border-radius:6px;
-      box-shadow:0 0 6px rgba(0,0,0,0.3);
-    }
   </style>
 </head>
 
@@ -26,53 +15,65 @@
 
 <div id="map"></div>
 
-<div class="search-box">
-  <input type="text" id="groupSearch" placeholder="Pump Owner">
-  <button onclick="searchPumpOwner()">Search</button>
-</div>
-
 <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
 
 <script>
+
 // ================= MAP =================
 var map = L.map('map').setView([23.6850, 90.3563], 7);
 
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
 
-// ================= DATA =================
 var allFeatures = [];
 var geoLayer;
 
-// ================= GOOGLE DRIVE FILES (PROXY FIX) =================
+// ================= GOOGLE DRIVE LINKS =================
 var files = [
-  "https://api.allorigins.win/raw?url=https://drive.google.com/uc?export=download&id=1tzFfTaqg-S1PW2S7-EtXxSEkTROCSYcQ",
-  "https://api.allorigins.win/raw?url=https://drive.google.com/uc?export=download&id=1ubWxpYBf6tlaDLmJ0s-BA2LRWqcEEtxZ",
-  "https://api.allorigins.win/raw?url=https://drive.google.com/uc?export=download&id=1ViJPUYknZrMSIV6HHwYZm-4J7eLP1HMp",
-  "https://api.allorigins.win/raw?url=https://drive.google.com/uc?export=download&id=1wr6N0eWovHIv5VXDCu4KESvYKA54rF3z",
-  "https://api.allorigins.win/raw?url=https://drive.google.com/uc?export=download&id=1qLNZY95E7x6X1jsQn1OnybtLK93NBWvO"
+  "https://drive.google.com/uc?export=download&id=1tzFfTaqg-S1PW2S7-EtXxSEkTROCSYcQ",
+  "https://drive.google.com/uc?export=download&id=1ubWxpYBf6tlaDLmJ0s-BA2LRWqcEEtxZ",
+  "https://drive.google.com/uc?export=download&id=1ViJPUYknZrMSIV6HHwYZm-4J7eLP1HMp",
+  "https://drive.google.com/uc?export=download&id=1wr6N0eWovHIv5VXDCu4KESvYKA54rF3z",
+  "https://drive.google.com/uc?export=download&id=1qLNZY95E7x6X1jsQn1OnybtLK93NBWvO"
 ];
 
-// ================= LOADER =================
-async function loadData() {
+// ================= NEW STABLE LOADER =================
+async function loadFile(url){
   try {
-    let responses = await Promise.all(files.map(url => fetch(url)));
-    let jsons = await Promise.all(responses.map(res => res.json()));
+    const proxy = "https://api.allorigins.win/get?url=" + encodeURIComponent(url);
+    const res = await fetch(proxy);
+    const data = await res.json();
 
-    jsons.forEach(data => {
-      if (data.features) {
-        allFeatures.push(...data.features);
-      }
-    });
+    // Extract actual content
+    const text = data.contents;
 
-    drawLayer(allFeatures);
+    return JSON.parse(text);
 
   } catch (err) {
-    console.error(err);
-    alert("Data loading failed (Google Drive blocked or slow)");
+    console.error("Failed:", url, err);
+    return null;
   }
 }
 
-loadData();
+// ================= LOAD ALL =================
+async function loadAll(){
+
+  let results = await Promise.all(files.map(loadFile));
+
+  results.forEach(r => {
+    if (r && r.features) {
+      allFeatures.push(...r.features);
+    }
+  });
+
+  if(allFeatures.length === 0){
+    alert("❌ Google Drive blocked data (file too large or proxy failed)");
+    return;
+  }
+
+  drawLayer(allFeatures);
+}
+
+loadAll();
 
 // ================= DRAW =================
 function drawLayer(features){
@@ -80,40 +81,10 @@ function drawLayer(features){
   if(geoLayer) map.removeLayer(geoLayer);
 
   geoLayer = L.geoJSON(features,{
-    style:{color:'yellow',weight:2,fillOpacity:0},
-
-    onEachFeature:(feature,layer)=>{
-      layer.on('click', e=>{
-        let html="<table border='1'>";
-        for(let k in feature.properties){
-          html+=`<tr><td><b>${k}</b></td><td>${feature.properties[k]}</td></tr>`;
-        }
-        html+="</table>";
-
-        L.popup()
-          .setLatLng(e.latlng)
-          .setContent(html)
-          .openOn(map);
-      });
-    }
-
+    style:{color:'yellow',weight:2}
   }).addTo(map);
 
-  if(features.length) map.fitBounds(geoLayer.getBounds());
-}
-
-// ================= SEARCH =================
-function searchPumpOwner(){
-  let val=document.getElementById("groupSearch").value.toLowerCase();
-
-  let f=allFeatures.find(x =>
-    x.properties.Pump_Owner &&
-    x.properties.Pump_Owner.toLowerCase()===val
-  );
-
-  if(!f) return alert("Not found");
-
-  drawLayer([f]);
+  map.fitBounds(geoLayer.getBounds());
 }
 
 </script>
