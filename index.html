@@ -82,17 +82,6 @@
       color:red;
       font-weight:bold;
     }
-
-    @media (max-width:600px){
-      .sidebar { width:220px; }
-      .left-controls { bottom:10px; left:8px; }
-      .locate-btn, .compass {
-        width:34px;
-        height:34px;
-        font-size:14px;
-      }
-    }
-
   </style>
 </head>
 
@@ -100,13 +89,11 @@
 
 <div id="map"></div>
 
-<!-- SEARCH -->
 <div class="search-box">
   <input type="text" id="groupSearch" placeholder="Pump Owner">
   <button onclick="searchPumpOwner()">Search</button>
 </div>
 
-<!-- SIDEBAR -->
 <div id="sidebar" class="sidebar">
   <h3>Filter Panel</h3>
 
@@ -121,7 +108,6 @@
 
 <div id="toggleBtn" class="toggle-btn">☰</div>
 
-<!-- LEFT CONTROLS -->
 <div class="left-controls">
   <div class="locate-btn" id="locateBtn">📍</div>
   <div class="compass">N</div>
@@ -132,14 +118,11 @@
 <script>
 
 // ================= BASEMAPS =================
-
-// OpenStreetMap (Google-like road map)
 var osm = L.tileLayer(
 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
 { attribution: '© OpenStreetMap' }
 );
 
-// Satellite (Esri)
 var satellite = L.tileLayer(
 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
 { attribution: 'Tiles © Esri' }
@@ -152,9 +135,8 @@ var map = L.map('map',{
   layers:[satellite]
 });
 
-// Layer control
 L.control.layers({
-  "Google Map": osm,
+  "OpenStreetMap": osm,
   "Satellite": satellite
 }).addTo(map);
 
@@ -185,25 +167,52 @@ map.on("locationfound", function (e) {
     .openPopup();
 });
 
-// ================= DATA =================
+// ================= FIXED GEOJSON LOADER =================
+
+// 🔥 IMPORTANT FIX: use correct relative paths (works in GitHub + local server)
 var files = [
-  "/SRCP-/data_part1.geojson",
-  "/SRCP-/data_part2.geojson",
-  "/SRCP-/data_part3.geojson",
-  "/SRCP-/data_part4.geojson",
-  "/SRCP-/data_part5.geojson"
+  "./data_part1.geojson",
+  "./data_part2.geojson",
+  "./data_part3.geojson",
+  "./data_part4.geojson",
+  "./data_part5.geojson"
 ];
 
 var allFeatures = [];
 var geoLayer;
 
-// ================= LOAD =================
-Promise.all(files.map(f=>fetch(f).then(r=>r.json())))
-.then(results=>{
-  results.forEach(d=>allFeatures.push(...d.features));
-  initFilters();
-  drawLayer(allFeatures);
-});
+// Robust loader with error handling
+async function loadGeoJSONFiles(){
+  try {
+    const results = await Promise.all(
+      files.map(async (f) => {
+        const res = await fetch(f);
+
+        if (!res.ok) {
+          throw new Error("Failed to load: " + f + " (HTTP " + res.status + ")");
+        }
+
+        return await res.json();
+      })
+    );
+
+    results.forEach(d => {
+      if (d.features) allFeatures.push(...d.features);
+    });
+
+    console.log("Loaded features:", allFeatures.length);
+
+    initFilters();
+    drawLayer(allFeatures);
+
+  } catch (err) {
+    console.error(err);
+    alert("Data loading failed. Check file paths or GitHub Pages setup.\n\n" + err.message);
+  }
+}
+
+// start loading
+loadGeoJSONFiles();
 
 // ================= DRAW =================
 function drawLayer(features){
@@ -252,7 +261,6 @@ function initFilters(){
   fill("districtFilter",unique("District_"));
 }
 
-// cascading
 districtFilter.onchange=function(){
   let d=this.value;
   let f=allFeatures.filter(x=>!d||x.properties.District_===d);
