@@ -1,13 +1,51 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>SRCP Map - Final Fix</title>
+  <title>SRCP Map - GitHub Data</title>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
   <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
+
   <style>
     body { margin:0; }
     #map { height:100vh; }
+
+    .search-box {
+      position:absolute; top:10px; left:50%;
+      transform:translateX(-50%);
+      z-index:1000;
+      background:white; padding:6px;
+      border-radius:6px;
+      box-shadow:0 0 6px rgba(0,0,0,0.3);
+      display:flex; gap:5px;
+    }
+
+    .sidebar {
+      position:absolute; top:0; left:0;
+      width:260px; height:100%;
+      background:white;
+      z-index:1000;
+      padding:15px;
+      box-shadow:2px 0 6px rgba(0,0,0,0.3);
+      transition:0.3s;
+    }
+
+    .sidebar.hide { left:-260px; }
+
+    .toggle-btn {
+      position:absolute;
+      top:15px;
+      left:270px;
+      z-index:1100;
+      background:white;
+      padding:6px 10px;
+      cursor:pointer;
+      border-radius:4px;
+      box-shadow:0 0 5px rgba(0,0,0,0.3);
+    }
+
+    .toggle-btn.shift { left:10px; }
   </style>
 </head>
 
@@ -15,65 +53,66 @@
 
 <div id="map"></div>
 
+<!-- SEARCH -->
+<div class="search-box">
+  <input type="text" id="groupSearch" placeholder="Pump Owner">
+  <button onclick="searchPumpOwner()">Search</button>
+</div>
+
+<!-- SIDEBAR -->
+<div id="sidebar" class="sidebar">
+  <h3>Filter Panel</h3>
+
+  <select id="districtFilter"></select>
+  <select id="upazilaFilter"></select>
+  <select id="unionFilter"></select>
+  <select id="villageFilter"></select>
+
+  <button onclick="applyFilter()">Apply Filter</button>
+  <button onclick="resetFilter()">Reset</button>
+</div>
+
+<div id="toggleBtn" class="toggle-btn">☰</div>
+
 <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
 
 <script>
-
 // ================= MAP =================
 var map = L.map('map').setView([23.6850, 90.3563], 7);
 
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
 
+// ================= DATA =================
 var allFeatures = [];
 var geoLayer;
 
-// ================= GOOGLE DRIVE LINKS =================
+// ================= GITHUB RAW FILES =================
 var files = [
-  "https://drive.google.com/uc?export=download&id=1tzFfTaqg-S1PW2S7-EtXxSEkTROCSYcQ",
-  "https://drive.google.com/uc?export=download&id=1ubWxpYBf6tlaDLmJ0s-BA2LRWqcEEtxZ",
-  "https://drive.google.com/uc?export=download&id=1ViJPUYknZrMSIV6HHwYZm-4J7eLP1HMp",
-  "https://drive.google.com/uc?export=download&id=1wr6N0eWovHIv5VXDCu4KESvYKA54rF3z",
-  "https://drive.google.com/uc?export=download&id=1qLNZY95E7x6X1jsQn1OnybtLK93NBWvO"
+  "https://raw.githubusercontent.com/YOUR_USERNAME/srcp-map/main/data/data_part1.geojson",
+  "https://raw.githubusercontent.com/YOUR_USERNAME/srcp-map/main/data/data_part2.geojson",
+  "https://raw.githubusercontent.com/YOUR_USERNAME/srcp-map/main/data/data_part3.geojson",
+  "https://raw.githubusercontent.com/YOUR_USERNAME/srcp-map/main/data/data_part4.geojson",
+  "https://raw.githubusercontent.com/YOUR_USERNAME/srcp-map/main/data/data_part5.geojson"
 ];
 
-// ================= NEW STABLE LOADER =================
-async function loadFile(url){
-  try {
-    const proxy = "https://api.allorigins.win/get?url=" + encodeURIComponent(url);
-    const res = await fetch(proxy);
-    const data = await res.json();
-
-    // Extract actual content
-    const text = data.contents;
-
-    return JSON.parse(text);
-
-  } catch (err) {
-    console.error("Failed:", url, err);
-    return null;
-  }
-}
-
-// ================= LOAD ALL =================
-async function loadAll(){
-
-  let results = await Promise.all(files.map(loadFile));
-
-  results.forEach(r => {
-    if (r && r.features) {
-      allFeatures.push(...r.features);
-    }
+// ================= LOAD DATA =================
+Promise.all(
+  files.map(url =>
+    fetch(url).then(res => res.json())
+  )
+)
+.then(results => {
+  results.forEach(d => {
+    if (d.features) allFeatures.push(...d.features);
   });
 
-  if(allFeatures.length === 0){
-    alert("❌ Google Drive blocked data (file too large or proxy failed)");
-    return;
-  }
-
+  initFilters();
   drawLayer(allFeatures);
-}
-
-loadAll();
+})
+.catch(err => {
+  console.error(err);
+  alert("Data loading failed. Check file path or GitHub links.");
+});
 
 // ================= DRAW =================
 function drawLayer(features){
@@ -81,11 +120,113 @@ function drawLayer(features){
   if(geoLayer) map.removeLayer(geoLayer);
 
   geoLayer = L.geoJSON(features,{
-    style:{color:'yellow',weight:2}
+    style:{color:'yellow',weight:2,fillOpacity:0},
+
+    onEachFeature:(feature,layer)=>{
+      layer.on('click', e=>{
+        let html="<table border='1'>";
+        for(let k in feature.properties){
+          html+=`<tr><td><b>${k}</b></td><td>${feature.properties[k]}</td></tr>`;
+        }
+        html+="</table>";
+
+        L.popup()
+          .setLatLng(e.latlng)
+          .setContent(html)
+          .openOn(map);
+      });
+    }
+
   }).addTo(map);
 
-  map.fitBounds(geoLayer.getBounds());
+  if(features.length) map.fitBounds(geoLayer.getBounds());
 }
+
+// ================= FILTER =================
+function unique(field,data=allFeatures){
+  return [...new Set(data.map(f=>f.properties[field]).filter(Boolean))];
+}
+
+function fill(id,values){
+  let el=document.getElementById(id);
+  el.innerHTML=`<option value="">${id.replace("Filter","")}</option>`;
+  values.forEach(v=>{
+    let o=document.createElement("option");
+    o.value=v; o.text=v;
+    el.appendChild(o);
+  });
+}
+
+function initFilters(){
+  fill("districtFilter",unique("District_"));
+}
+
+districtFilter.onchange=function(){
+  let d=this.value;
+  let f=allFeatures.filter(x=>!d||x.properties.District_===d);
+  fill("upazilaFilter",unique("Upazila_",f));
+  fill("unionFilter",[]);
+  fill("villageFilter",[]);
+};
+
+upazilaFilter.onchange=function(){
+  let d=districtFilter.value,u=this.value;
+  let f=allFeatures.filter(x=>
+    (!d||x.properties.District_===d)&&
+    (!u||x.properties.Upazila_===u)
+  );
+  fill("unionFilter",unique("Union_",f));
+  fill("villageFilter",[]);
+};
+
+unionFilter.onchange=function(){
+  let d=districtFilter.value,u=upazilaFilter.value,un=this.value;
+  let f=allFeatures.filter(x=>
+    (!d||x.properties.District_===d)&&
+    (!u||x.properties.Upazila_===u)&&
+    (!un||x.properties.Union_===un)
+  );
+  fill("villageFilter",unique("Village",f));
+};
+
+function applyFilter(){
+  let d=districtFilter.value,u=upazilaFilter.value,
+      un=unionFilter.value,v=villageFilter.value;
+
+  let f=allFeatures.filter(x=>
+    (!d||x.properties.District_===d)&&
+    (!u||x.properties.Upazila_===u)&&
+    (!un||x.properties.Union_===un)&&
+    (!v||x.properties.Village===v)
+  );
+
+  drawLayer(f);
+}
+
+function resetFilter(){
+  initFilters();
+  drawLayer(allFeatures);
+}
+
+// ================= SEARCH =================
+function searchPumpOwner(){
+  let val=document.getElementById("groupSearch").value.toLowerCase();
+
+  let f=allFeatures.find(x =>
+    x.properties.Pump_Owner &&
+    x.properties.Pump_Owner.toLowerCase()===val
+  );
+
+  if(!f) return alert("Not found");
+
+  drawLayer([f]);
+}
+
+// ================= SIDEBAR =================
+document.getElementById("toggleBtn").onclick = function(){
+  document.getElementById("sidebar").classList.toggle("hide");
+  this.classList.toggle("shift");
+};
 
 </script>
 
