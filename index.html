@@ -193,8 +193,8 @@ function drawLayers(gFeatures, pFeatures){
   if(selected==="pipe" || selected==="both"){
     pipeLayer = L.geoJSON(pFeatures,{
       pointToLayer:(f,latlng)=>L.circleMarker(latlng,{
-        radius:1,
-        color:"#00FFFF",
+        radius:2,
+        color:"#FF0000",
         fillOpacity:0.3,
         weight:1
       }),
