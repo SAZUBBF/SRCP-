@@ -30,22 +30,13 @@
       z-index:1000;
       padding:15px;
       box-shadow:2px 0 6px rgba(0,0,0,0.3);
-      transition:0.3s;
       overflow-y:auto;
     }
-
-    .sidebar.hide { left:-260px; }
 
     .sidebar h4 {
       margin:10px 0 5px;
       font-size:14px;
       border-bottom:1px solid #ddd;
-    }
-
-    .sidebar label {
-      font-size:13px;
-      display:block;
-      margin-bottom:5px;
     }
 
     .sidebar select, .sidebar button {
@@ -63,10 +54,7 @@
       padding:6px 10px;
       cursor:pointer;
       border-radius:4px;
-      box-shadow:0 0 5px rgba(0,0,0,0.3);
     }
-
-    .toggle-btn.shift { left:10px; }
 
     .left-controls {
       position:absolute;
@@ -87,7 +75,6 @@
       align-items:center;
       justify-content:center;
       cursor:pointer;
-      box-shadow:0 0 5px rgba(0,0,0,0.3);
     }
 
     .compass {
@@ -111,13 +98,11 @@
 
   <h3>Filter Panel</h3>
 
-  <!-- ✅ Layer Selection -->
   <h4>Layer Selection</h4>
   <label><input type="radio" name="layerSelect" value="group" checked> Group Map</label>
   <label><input type="radio" name="layerSelect" value="pipe"> Pani Pipe</label>
   <label><input type="radio" name="layerSelect" value="both"> Group Map & Pani Pipe</label>
 
-  <!-- Filters -->
   <h4>Location Filter</h4>
   <select id="districtFilter"></select>
   <select id="upazilaFilter"></select>
@@ -141,10 +126,7 @@
 <script>
 
 // ================= MAP =================
-var map = L.map('map',{
-  center:[23.6850,90.3563],
-  zoom:7
-});
+var map = L.map('map',{ center:[23.6850,90.3563], zoom:7 });
 
 var osm = L.tileLayer(
 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png'
@@ -154,23 +136,11 @@ var satellite = L.tileLayer(
 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'
 );
 
-L.control.layers({
-  "Map": osm,
-  "Satellite": satellite
-}).addTo(map);
+L.control.layers({ "Map": osm, "Satellite": satellite }).addTo(map);
 
 // ================= LOCATION =================
 document.getElementById("locateBtn").onclick = function () {
   map.locate({ setView: true, maxZoom: 16 });
-};
-
-// ================= SIDEBAR =================
-var sidebar = document.getElementById("sidebar");
-var toggleBtn = document.getElementById("toggleBtn");
-
-toggleBtn.onclick = function(){
-  sidebar.classList.toggle("hide");
-  toggleBtn.classList.toggle("shift");
 };
 
 // ================= DATA =================
@@ -223,9 +193,9 @@ function drawLayers(gFeatures, pFeatures){
   if(selected==="pipe" || selected==="both"){
     pipeLayer = L.geoJSON(pFeatures,{
       pointToLayer:(f,latlng)=>L.circleMarker(latlng,{
-        radius:2,   // 🔥 small size for dense data
+        radius:1,
         color:"#00FFFF",
-        fillOpacity:0.6,
+        fillOpacity:0.3,
         weight:1
       }),
       onEachFeature:popupHandler
@@ -237,19 +207,6 @@ function drawLayers(gFeatures, pFeatures){
     let temp = L.geoJSON(all);
     map.fitBounds(temp.getBounds());
   }
-}
-
-// ================= POPUP =================
-function popupHandler(feature, layer){
-  layer.on('click', e=>{
-    let html="<table border='1'>";
-    for(let k in feature.properties){
-      html+=`<tr><td><b>${k}</b></td><td>${feature.properties[k]}</td></tr>`;
-    }
-    html+="</table>";
-
-    L.popup().setLatLng(e.latlng).setContent(html).openOn(map);
-  });
 }
 
 // ================= FILTER =================
@@ -320,6 +277,19 @@ function applyFilter(){
 function resetFilter(){
   initFilters();
   drawLayers(groupFeatures, pipeFeatures);
+}
+
+// ================= POPUP =================
+function popupHandler(feature, layer){
+  layer.on('click', e=>{
+    let html="<table border='1'>";
+    for(let k in feature.properties){
+      html+=`<tr><td><b>${k}</b></td><td>${feature.properties[k]}</td></tr>`;
+    }
+    html+="</table>";
+
+    L.popup().setLatLng(e.latlng).setContent(html).openOn(map);
+  });
 }
 
 // ================= SEARCH =================
