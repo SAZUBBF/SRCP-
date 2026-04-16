@@ -31,7 +31,10 @@
       padding:15px;
       box-shadow:2px 0 6px rgba(0,0,0,0.3);
       overflow-y:auto;
+      transition:0.3s;
     }
+
+    .sidebar.hide { left:-260px; }
 
     .sidebar h4 {
       margin:10px 0 5px;
@@ -54,7 +57,10 @@
       padding:6px 10px;
       cursor:pointer;
       border-radius:4px;
+      box-shadow:0 0 5px rgba(0,0,0,0.3);
     }
+
+    .toggle-btn.shift { left:10px; }
 
     .left-controls {
       position:absolute;
@@ -75,12 +81,49 @@
       align-items:center;
       justify-content:center;
       cursor:pointer;
+      box-shadow:0 0 5px rgba(0,0,0,0.3);
     }
 
     .compass {
       border-radius:50%;
       color:red;
       font-weight:bold;
+    }
+
+    /* ✅ Mobile friendly */
+    @media (max-width:600px){
+
+      .sidebar{
+        width:200px;
+        padding:10px;
+      }
+
+      .search-box{
+        width:90%;
+      }
+
+      .search-box input{
+        width:70%;
+      }
+
+      .search-box button{
+        width:30%;
+      }
+
+      .toggle-btn{
+        left:210px;
+      }
+
+      .locate-btn, .compass{
+        width:34px;
+        height:34px;
+        font-size:14px;
+      }
+
+      select, button{
+        font-size:14px;
+        padding:8px;
+      }
     }
   </style>
 </head>
@@ -125,22 +168,57 @@
 
 <script>
 
-// ================= MAP =================
-var map = L.map('map',{ center:[23.6850,90.3563], zoom:7 });
-
-var osm = L.tileLayer(
-'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png'
-).addTo(map);
-
+// ================= BASEMAP =================
 var satellite = L.tileLayer(
 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'
 );
 
-L.control.layers({ "Map": osm, "Satellite": satellite }).addTo(map);
+var osm = L.tileLayer(
+'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png'
+);
+
+// default satellite
+var map = L.map('map',{
+  center:[23.6850,90.3563],
+  zoom:7,
+  layers:[satellite]
+});
+
+L.control.layers({
+  "Map": osm,
+  "Satellite": satellite
+}).addTo(map);
 
 // ================= LOCATION =================
+var userMarker;
+
+// auto locate
+map.locate({ setView: true, maxZoom: 15 });
+
+map.on("locationfound", function (e) {
+  if (userMarker) map.removeLayer(userMarker);
+
+  userMarker = L.circleMarker(e.latlng, {
+    radius: 6,
+    color: "blue",
+    fillOpacity: 0.7
+  }).addTo(map)
+    .bindPopup("📍 You are here")
+    .openPopup();
+});
+
+// manual button
 document.getElementById("locateBtn").onclick = function () {
   map.locate({ setView: true, maxZoom: 16 });
+};
+
+// ================= SIDEBAR =================
+var sidebar = document.getElementById("sidebar");
+var toggleBtn = document.getElementById("toggleBtn");
+
+toggleBtn.onclick = function(){
+  sidebar.classList.toggle("hide");
+  toggleBtn.classList.toggle("shift");
 };
 
 // ================= DATA =================
@@ -195,7 +273,7 @@ function drawLayers(gFeatures, pFeatures){
       pointToLayer:(f,latlng)=>L.circleMarker(latlng,{
         radius:2,
         color:"#FF0000",
-        fillOpacity:0.3,
+        fillOpacity:0.4,
         weight:1
       }),
       onEachFeature:popupHandler
@@ -226,6 +304,9 @@ function fill(id,values){
 
 function initFilters(){
   fill("districtFilter",unique("District_",groupFeatures));
+  document.getElementById("upazilaFilter").innerHTML="<option value=''>Upazila</option>";
+  document.getElementById("unionFilter").innerHTML="<option value=''>Union</option>";
+  document.getElementById("villageFilter").innerHTML="<option value=''>Village</option>";
 }
 
 districtFilter.onchange=function(){
@@ -278,6 +359,11 @@ function resetFilter(){
   initFilters();
   drawLayers(groupFeatures, pipeFeatures);
 }
+
+// auto redraw when layer changes
+document.querySelectorAll('input[name="layerSelect"]').forEach(el=>{
+  el.addEventListener("change", applyFilter);
+});
 
 // ================= POPUP =================
 function popupHandler(feature, layer){
